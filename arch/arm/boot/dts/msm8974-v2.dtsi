@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -41,17 +41,12 @@
 		compatible = "qcom,android-usb";
 		reg = <0xfe8050c8 0xc8>;
 		qcom,android-usb-swfi-latency = <1>;
-		qcom,android-usb-uicc-nluns = /bits/ 8 <1>;
 	};
 
 	qcom,msm-imem@fe805000 {
 		compatible = "qcom,msm-imem";
 		reg = <0xfe805000 0x1000>; /* Address and size of IMEM */
 	};
-};
-
-&usb3 {
-	qcom,usbin-vadc = <&pm8941_vadc>;
 };
 
 /* GPU overrides */
@@ -63,20 +58,14 @@
 	qcom,msm-bus,vectors-KBps =
 		/* Off */
 		<26 512 0 0>, <89 604 0 0>,
-		/* Sub-SVS / SVS */
-		<26 512 0 1600000>, <89 604 0 3000000>,
 		/* SVS */
 		<26 512 0 2400000>, <89 604 0 3000000>,
 		/* Nominal / SVS */
-		<26 512 0 4912000>, <89 604 0 3000000>,
-		/* SVS / Nominal */
-		<26 512 0 2400000>, <89 604 0 5120000>,
+		<26 512 0 4656000>, <89 604 0 3000000>,
 		/* Nominal */
-		<26 512 0 4912000>, <89 604 0 5120000>,
+		<26 512 0 4656000>, <89 604 0 5120000>,
 		/* Turbo / Nominal */
 		<26 512 0 7464000>, <89 604 0 5120000>,
-		/* Nominal / Turbo */
-		<26 512 0 4912000>, <89 604 0 6400000>,
 		/* Turbo */
 		<26 512 0 7464000>, <89 604 0 6400000>;
 };
@@ -127,7 +116,7 @@
 	qcom,dec-ocmem-ab-ib = <0 0>,
 		<176000 519000>,
 		<456000 519000>,
-		<864000 629000>,
+		<864000 519000>,
 		<1728000 1038000>,
 		<2766000 1661000>,
 		<3456000 2076000>,
@@ -199,17 +188,17 @@
 
 &cci {
 
-	qcom,camera@0 {
+	qcom,camera@6e {
 		qcom,vdd-cx-supply = <&pm8841_s2>;
 		qcom,vdd-cx-name = "qcom,vdd-cx";
 	};
 
-	qcom,camera@1 {
+	qcom,camera@20 {
 		qcom,vdd-cx-supply = <&pm8841_s2>;
 		qcom,vdd-cx-name = "qcom,vdd-cx";
 	};
 
-	qcom,camera@2 {
+	qcom,camera@6c {
 		qcom,vdd-cx-supply = <&pm8841_s2>;
 		qcom,vdd-cx-name = "qcom,vdd-cx";
 	};
