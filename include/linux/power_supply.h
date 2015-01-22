@@ -245,6 +245,8 @@ extern int power_supply_register(struct device *parent,
 				 struct power_supply *psy);
 extern void power_supply_unregister(struct power_supply *psy);
 extern int power_supply_powers(struct power_supply *psy, struct device *dev);
+extern int register_power_supply_notifier(struct notifier_block*);
+extern int unregister_power_supply_notifier(struct notifier_block*);
 #else
 static inline struct power_supply *power_supply_get_by_name(char *name)
 							{ return NULL; }
@@ -253,12 +255,13 @@ static inline int power_supply_am_i_supplied(struct power_supply *psy)
 							{ return -ENOSYS; }
 static inline int power_supply_set_battery_charged(struct power_supply *psy)
 							{ return -ENOSYS; }
-static inline int power_supply_set_voltage_limit(struct power_supply *psy,
-							int limit)
-							{ return -ENOSYS; }
 static inline int power_supply_set_current_limit(struct power_supply *psy,
 							int limit)
 							{ return -ENOSYS; }
+static inline int power_supply_set_voltage_limit(struct power_supply *psy,
+							int limit)
+							{ return -ENOSYS; }
+
 static inline int power_supply_set_online(struct power_supply *psy,
 							bool enable)
 							{ return -ENOSYS; }
@@ -284,6 +287,10 @@ static inline int power_supply_register(struct device *parent,
 static inline void power_supply_unregister(struct power_supply *psy) { }
 static inline int power_supply_powers(struct power_supply *psy,
 				      struct device *dev)
+							{ return -ENOSYS; }
+extern int register_power_supply_notifier(struct notifier_block*)
+							{ return -ENOSYS; }
+extern int unregister_power_supply_notifier(struct notifier_block*)
 							{ return -ENOSYS; }
 #endif
 
