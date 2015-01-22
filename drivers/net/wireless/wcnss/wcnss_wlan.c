@@ -925,7 +925,7 @@ void wcnss_reset_intr(void)
 {
 	if (wcnss_hardware_type() == WCNSS_PRONTO_HW) {
 		wcnss_pronto_log_debug_regs();
-		wcnss_log_iris_regs();
+		//wcnss_log_iris_regs();
 		wmb();
 		__raw_writel(1 << 16, penv->fiq_reg);
 	} else {
