@@ -20,7 +20,10 @@
 #include <mach/rpm-regulator-smd.h>
 #include <linux/regulator/consumer.h>
 
-/*#define CONFIG_MSMB_CAMERA_DEBUG*/
+extern int main_cam_eeprom_index;
+const char main_cam_backup2_sensor_name[16] = "s5k3h2yx_q8s02m";
+const char main_cam_backup3_sensor_name[18] = "s5k3h2yx_omi8a02a";
+
 #undef CDBG
 #ifdef CONFIG_MSMB_CAMERA_DEBUG
 #define CDBG(fmt, args...) pr_err(fmt, ##args)
@@ -28,9 +31,204 @@
 #define CDBG(fmt, args...) do { } while (0)
 #endif
 
-static int32_t msm_camera_get_power_settimgs_from_sensor_lib(
-	struct msm_camera_power_ctrl_t *power_info,
-	struct msm_sensor_power_setting_array *power_setting_array)
+static int32_t msm_sensor_enable_i2c_mux(struct msm_camera_i2c_conf *i2c_conf)
+{
+	struct v4l2_subdev *i2c_mux_sd =
+		dev_get_drvdata(&i2c_conf->mux_dev->dev);
+	v4l2_subdev_call(i2c_mux_sd, core, ioctl,
+		VIDIOC_MSM_I2C_MUX_INIT, NULL);
+	v4l2_subdev_call(i2c_mux_sd, core, ioctl,
+		VIDIOC_MSM_I2C_MUX_CFG, (void *)&i2c_conf->i2c_mux_mode);
+	return 0;
+}
+
+static int32_t msm_sensor_disable_i2c_mux(struct msm_camera_i2c_conf *i2c_conf)
+{
+	struct v4l2_subdev *i2c_mux_sd =
+		dev_get_drvdata(&i2c_conf->mux_dev->dev);
+	v4l2_subdev_call(i2c_mux_sd, core, ioctl,
+				VIDIOC_MSM_I2C_MUX_RELEASE, NULL);
+	return 0;
+}
+
+static int32_t msm_sensor_get_sub_module_index(struct device_node *of_node,
+	struct  msm_camera_sensor_board_info *sensordata)
+{
+	int32_t rc = 0, i = 0;
+	uint32_t val = 0, count = 0;
+	uint32_t *val_array = NULL;
+	struct device_node *src_node = NULL;
+
+	sensordata->sensor_info = kzalloc(sizeof(struct msm_sensor_info_t),
+		GFP_KERNEL);
+	if (!sensordata->sensor_info) {
+		pr_err("%s:%d failed\n", __func__, __LINE__);
+		return -ENOMEM;
+	}
+	for (i = 0; i < SUB_MODULE_MAX; i++)
+		sensordata->sensor_info->subdev_id[i] = -1;
+
+	src_node = of_parse_phandle(of_node, "qcom,actuator-src", 0);
+	if (!src_node) {
+		CDBG("%s:%d src_node NULL\n", __func__, __LINE__);
+	} else {
+		rc = of_property_read_u32(src_node, "cell-index", &val);
+		CDBG("%s qcom,actuator cell index %d, rc %d\n", __func__,
+			val, rc);
+		if (rc < 0) {
+			pr_err("%s failed %d\n", __func__, __LINE__);
+			goto ERROR;
+		}
+		if (2==main_cam_eeprom_index) {
+			val = 4;
+		} else if (3==main_cam_eeprom_index) {
+			val = 2;
+		}
+		sensordata->sensor_info->
+			subdev_id[SUB_MODULE_ACTUATOR] = val;
+		of_node_put(src_node);
+		src_node = NULL;
+	}
+
+	src_node = of_parse_phandle(of_node, "qcom,eeprom-src", 0);
+	if (!src_node) {
+		CDBG("%s:%d eeprom src_node NULL\n", __func__, __LINE__);
+	} else {
+		rc = of_property_read_u32(src_node, "cell-index", &val);
+		CDBG("%s qcom,eeprom cell index %d, rc %d\n", __func__,
+			val, rc);
+		if (rc < 0) {
+			pr_err("%s failed %d\n", __func__, __LINE__);
+			goto ERROR;
+		}
+		sensordata->sensor_info->
+			subdev_id[SUB_MODULE_EEPROM] = val;
+		of_node_put(src_node);
+		src_node = NULL;
+	}
+
+	if (of_property_read_bool(of_node, "qcom,eeprom-sd-index") ==
+		true) {
+		rc = of_property_read_u32(of_node, "qcom,eeprom-sd-index",
+			&val);
+		CDBG("%s qcom,eeprom-sd-index %d, rc %d\n", __func__, val, rc);
+		if (rc < 0) {
+			pr_err("%s:%d failed rc %d\n", __func__, __LINE__, rc);
+			goto ERROR;
+		}
+		sensordata->sensor_info->subdev_id[SUB_MODULE_EEPROM] = val;
+	}
+
+	src_node = of_parse_phandle(of_node, "qcom,led-flash-src", 0);
+	if (!src_node) {
+		CDBG("%s:%d src_node NULL\n", __func__, __LINE__);
+	} else {
+		rc = of_property_read_u32(src_node, "cell-index", &val);
+		CDBG("%s qcom,led flash cell index %d, rc %d\n", __func__,
+			val, rc);
+		if (rc < 0) {
+			pr_err("%s:%d failed %d\n", __func__, __LINE__, rc);
+			goto ERROR;
+		}
+		sensordata->sensor_info->
+			subdev_id[SUB_MODULE_LED_FLASH] = val;
+		of_node_put(src_node);
+		src_node = NULL;
+	}
+
+	if (of_property_read_bool(of_node, "qcom,strobe-flash-sd-index") ==
+		true) {
+		rc = of_property_read_u32(of_node, "qcom,strobe-flash-sd-index",
+			&val);
+		CDBG("%s qcom,strobe-flash-sd-index %d, rc %d\n", __func__,
+			val, rc);
+		if (rc < 0) {
+			pr_err("%s:%d failed rc %d\n", __func__, __LINE__, rc);
+			goto ERROR;
+		}
+		sensordata->sensor_info->subdev_id[SUB_MODULE_STROBE_FLASH] =
+			val;
+	}
+
+	if (of_get_property(of_node, "qcom,csiphy-sd-index", &count)) {
+		count /= sizeof(uint32_t);
+		if (count > 2) {
+			pr_err("%s qcom,csiphy-sd-index count %d > 2\n",
+				__func__, count);
+			goto ERROR;
+		}
+		val_array = kzalloc(sizeof(uint32_t) * count, GFP_KERNEL);
+		if (!val_array) {
+			pr_err("%s failed %d\n", __func__, __LINE__);
+			rc = -ENOMEM;
+			goto ERROR;
+		}
+
+		rc = of_property_read_u32_array(of_node, "qcom,csiphy-sd-index",
+			val_array, count);
+		if (rc < 0) {
+			pr_err("%s failed %d\n", __func__, __LINE__);
+			kfree(val_array);
+			goto ERROR;
+		}
+		for (i = 0; i < count; i++) {
+			sensordata->sensor_info->subdev_id
+				[SUB_MODULE_CSIPHY + i] = val_array[i];
+			CDBG("%s csiphy_core[%d] = %d\n",
+				__func__, i, val_array[i]);
+		}
+		kfree(val_array);
+	} else {
+		pr_err("%s:%d qcom,csiphy-sd-index not present\n", __func__,
+			__LINE__);
+		rc = -EINVAL;
+		goto ERROR;
+	}
+
+	if (of_get_property(of_node, "qcom,csid-sd-index", &count)) {
+		count /= sizeof(uint32_t);
+		if (count > 2) {
+			pr_err("%s qcom,csid-sd-index count %d > 2\n",
+				__func__, count);
+			rc = -EINVAL;
+			goto ERROR;
+		}
+		val_array = kzalloc(sizeof(uint32_t) * count, GFP_KERNEL);
+		if (!val_array) {
+			pr_err("%s failed %d\n", __func__, __LINE__);
+			rc = -ENOMEM;
+			goto ERROR;
+		}
+
+		rc = of_property_read_u32_array(of_node, "qcom,csid-sd-index",
+			val_array, count);
+		if (rc < 0) {
+			pr_err("%s failed %d\n", __func__, __LINE__);
+			kfree(val_array);
+			goto ERROR;
+		}
+		for (i = 0; i < count; i++) {
+			sensordata->sensor_info->subdev_id
+				[SUB_MODULE_CSID + i] = val_array[i];
+			CDBG("%s csid_core[%d] = %d\n",
+				__func__, i, val_array[i]);
+		}
+		kfree(val_array);
+	} else {
+		pr_err("%s:%d qcom,csid-sd-index not present\n", __func__,
+			__LINE__);
+		rc = -EINVAL;
+		goto ERROR;
+	}
+	return rc;
+ERROR:
+	kfree(sensordata->sensor_info);
+	sensordata->sensor_info = NULL;
+	return rc;
+}
+
+static int32_t msm_sensor_get_dt_csi_data(struct device_node *of_node,
+	struct  msm_camera_sensor_board_info *sensordata)
 {
 	int32_t rc = 0;
 	uint32_t size;
@@ -123,6 +321,11 @@ static int32_t msm_sensor_get_dt_data(struct device_node *of_node,
 
 	rc = of_property_read_string(of_node, "qcom,sensor-name",
 		&sensordata->sensor_name);
+	if ((strcmp(sensordata->sensor_name, "s5k3h2yx_owt8a01a") == 0) && (2==main_cam_eeprom_index)) {
+		sensordata->sensor_name = main_cam_backup2_sensor_name;
+	} else if ((strcmp(sensordata->sensor_name, "s5k3h2yx_owt8a01a") == 0) && (3==main_cam_eeprom_index)) {
+		sensordata->sensor_name = main_cam_backup3_sensor_name;
+	}
 	CDBG("%s qcom,sensor-name %s, rc %d\n", __func__,
 		sensordata->sensor_name, rc);
 	if (rc < 0) {
