@@ -1952,6 +1952,7 @@ qpnp_chg_dc_dcin_valid_irq_handler(int irq, void *_chip)
 			schedule_work(&chip->soc_check_work);
 		}
 
+		/*
 		if (qpnp_is_dc_higher_prio(chip)) {
 			pr_debug("dc has higher priority\n");
 			if (dc_present) {
@@ -1963,10 +1964,10 @@ qpnp_chg_dc_dcin_valid_irq_handler(int irq, void *_chip)
 				chip->aicl_settled = false;
 				qpnp_chg_iusbmax_set(chip,
 						USB_WALL_THRESHOLD_MA);
-				power_supply_set_voltage_limit(chip->usb_psy,
-						USB_9V_UV);
+				//power_supply_set_voltage_limit(chip->usb_psy,
+				//		USB_9V_UV);
 			}
-		}
+		}*/
 
 		pr_debug("psy changed dc_psy\n");
 		power_supply_changed(&chip->dc_psy);
