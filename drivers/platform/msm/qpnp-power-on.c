@@ -59,8 +59,7 @@
 #define QPNP_PON_KPDPWR_RESIN_S2_CNTL2(base)	(base + 0x4B)
 #define QPNP_PON_PS_HOLD_RST_CTL(base)		(base + 0x5A)
 #define QPNP_PON_PS_HOLD_RST_CTL2(base)		(base + 0x5B)
-#define QPNP_PON_WD_RST_S2_CTL(base)		(base + 0x56)
-#define QPNP_PON_WD_RST_S2_CTL2(base)		(base + 0x57)
+#define QPNP_PON_TRIGGER_EN(base)		(base + 0x80)
 #define QPNP_PON_S3_SRC(base)			(base + 0x74)
 #define QPNP_PON_S3_DBC_CTL(base)		(base + 0x75)
 #define QPNP_PON_TRIGGER_EN(base)		(base + 0x80)
@@ -69,6 +68,12 @@
 #define QPNP_PON_S3_SRC_RESIN			1
 #define QPNP_PON_S3_SRC_KPDPWR_AND_RESIN	2
 #define QPNP_PON_S3_SRC_KPDPWR_OR_RESIN		3
+#define QPNP_PON_S3_SRC_MASK			0x3
+
+#define QPNP_PON_S3_SRC_KPDPWR			0
+#define QPNP_PON_S3_SRC_RESIN			1
+#define QPNP_PON_S3_SRC_KPDPWR_OR_RESIN		3
+#define QPNP_PON_S3_SRC_KPDPWR_AND_RESIN	2
 #define QPNP_PON_S3_SRC_MASK			0x3
 
 #define QPNP_PON_WARM_RESET_TFT			BIT(4)
@@ -234,7 +239,17 @@ int qpnp_pon_system_pwr_off(enum pon_power_off_type type)
 		return rc;
 	}
 
-	if (reg == PON_REV2_VALUE)
+	/*
+	 * Set PON_DEBOUNCE_TIMER to 500ms before power off
+	 */
+	rc = qpnp_pon_masked_write(pon, QPNP_PON_DBC_CTL(pon->base),
+						QPNP_PON_DBC_DELAY_MASK, 0x5);
+	if (rc) {
+		dev_err(&pon->spmi->dev, "Unable to set PON debounce\n");
+		return rc;
+	}
+
+	if (reg == 0x00)
 		rst_en_reg = QPNP_PON_PS_HOLD_RST_CTL(pon->base);
 	else
 		rst_en_reg = QPNP_PON_PS_HOLD_RST_CTL2(pon->base);
@@ -659,12 +674,14 @@ qpnp_config_reset(struct qpnp_pon *pon, struct qpnp_pon_config *cfg)
 		return rc;
 	}
 
-	/* enable S2 reset */
-	rc = qpnp_pon_masked_write(pon, cfg->s2_cntl2_addr,
-				QPNP_PON_S2_CNTL_EN, QPNP_PON_S2_CNTL_EN);
-	if (rc) {
-		dev_err(&pon->spmi->dev, "Unable to configure S2 enable\n");
-		return rc;
+	if (cfg->support_reset) {
+		/* enable S2 reset */
+		rc = qpnp_pon_masked_write(pon, cfg->s2_cntl2_addr,
+					QPNP_PON_S2_CNTL_EN, QPNP_PON_S2_CNTL_EN);
+		if (rc) {
+			dev_err(&pon->spmi->dev, "Unable to configure S2 enable\n");
+			return rc;
+		}
 	}
 
 	return 0;
@@ -1064,7 +1081,8 @@ static int __devinit qpnp_pon_config_init(struct qpnp_pon *pon)
 			goto unreg_input_dev;
 		}
 		/* Configure the reset-configuration */
-		if (cfg->support_reset) {
+		/* Make sure to clear reset if not supported */
+		if (1 || cfg->support_reset) {
 			rc = qpnp_config_reset(pon, cfg);
 			if (rc) {
 				dev_err(&pon->spmi->dev,
@@ -1109,10 +1127,9 @@ static int __devinit qpnp_pon_probe(struct spmi_device *spmi)
 	struct device_node *itr = NULL;
 	u32 delay = 0, s3_debounce = 0;
 	int rc, sys_reset, index;
-	u8 pon_sts = 0, buf[2];
+	u8 pon_sts = 0;
 	const char *s3_src;
 	u8 s3_src_reg;
-	u16 poff_sts = 0;
 
 	pon = devm_kzalloc(&spmi->dev, sizeof(struct qpnp_pon),
 							GFP_KERNEL);
@@ -1256,9 +1273,6 @@ static int __devinit qpnp_pon_probe(struct spmi_device *spmi)
 	else /* default combination */
 		s3_src_reg = QPNP_PON_S3_SRC_KPDPWR_AND_RESIN;
 
-	/* S3 source is a write once register. If the register has
-	 * been configured by bootloader then this operation will
-	 * not be effective. */
 	rc = qpnp_pon_masked_write(pon, QPNP_PON_S3_SRC(pon->base),
 			QPNP_PON_S3_SRC_MASK, s3_src_reg);
 	if (rc) {
